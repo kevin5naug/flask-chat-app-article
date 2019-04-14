@@ -1,0 +1,16 @@
+<html>
+<head>
+</head>
+<body>
+    <h2>User Registration Form</h2>
+    <form action='register' method='POST'>
+	username:
+	<input type='text' name='username' required/></br>
+	<input type='submit' value='Register as Customer' /></br>
+    </form>
+    {% if error %}
+	<p class="error"><strong>Error:</strong> {{error}}</p>
+    {% endif %}
+    <a href='/'>Go Back</a>
+</body>
+</html>

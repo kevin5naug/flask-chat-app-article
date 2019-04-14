@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Chat Home Page</title>
+    <style type="text/css">
+	table, th, td{
+	    border: 1px solid black;
+        }
+    </style>
+</head>
+<body onbeforeunload='socket.disconnect()'>
+    {% if current_user.is_authenticated %}
+	<h2 id='username'>{{current_user.id}}</h2>
+    {% endif %}
+
+    <div id="online_user_list">
+    </div>
+
+
+    <h3 id='status' style='color: #ccc;font-size: 30px;'>Not connected to server yet..</h3>
+    <form id="connection_target" action="" method="POST">
+	Connection Target Username:
+        <input type="text" class="username"/>
+        <input type="submit"/>
+    </form>
+    <div id="chat_input" style="display:none;">
+    <h3>Chat Room Number:</h3> 
+    <h3 id='room_number'>Not Assigned</h3>
+    <h3 id='last_left_user'>No one has left this chat group yet</h3>
+    <div class="message_holder"></div>
+
+    <form id="chat_message" action="" method="POST">
+	Send Message:
+	<input type="text" class="message"/>
+	<input type="submit"/>
+    </form>
+    <a id='quit_chat' href='/home'>Quit This Chat Room</a>
+    </div>
+    <a id='log_out' href='/logout'>Log Out Your Account</a>
+<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js"></script>
+<script type="text/javascript">
+var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+socket.on( 'connect', function() {
+    var form1 = $( '#connection_target' ).on( 'submit', function( e ) {
+	e.preventDefault()
+	let username = $( 'input.username' ).val()
+	socket.emit( 'join', {
+	    username : username,
+	} )
+	document.getElementById("connection_target").reset();
+    } )
+    var form2 = $( '#chat_message' ).on( 'submit', function( e ) {
+	e.preventDefault()
+	let myUsername = $( '#username' ).text()
+	let message = $( 'input.message' ).val()
+	let room_number = parseInt($( '#room_number' ).text())
+	socket.emit( 'send chat message', {
+	    username : myUsername,
+	    message : message,
+	    room_number: room_number,
+	})
+	document.getElementById("chat_message").reset();
+    })
+    var action1 = $( '#quit_chat' ).on( 'click', function( e ){
+	e.preventDefault()
+	let myUsername = $( '#username' ).text()
+	let room_number = parseInt($( '#room_number' ).text())
+	socket.emit( 'quit chat group', {
+	    username : myUsername,
+	    room_number: room_number,
+	})
+    })
+})
+
+socket.on( 'online user list', function( d ){
+    console.log(d);
+    $('#online_user_list').empty();
+    for (var key in d){
+	var value = d[key];
+	$( '#online_user_list' ).append( '<div>'+'User: '+key+' Chat Room ID: '+value+'</div>' );
+    }
+})
+
+socket.on( 'connection ack', function( d ){
+    console.log(d)
+    if( d.msg == 'success'){
+	document.getElementById('status').innerHTML = "Not connected to any user yet. Please input a user that you want to be connected to";
+    }
+})
+
+socket.on('join ack', function( d ){
+    console.log(d)
+    if( d.msg == 'success'){
+	var myUsername = $( '#username' ).text();
+	if ( d.new_user == myUsername){
+	    document.getElementById('status').innerHTML = "Connected to a chat room now";
+	    console.log("before hiding form");
+	    $('#connection_target').hide();
+	    console.log("after hiding form");
+	    $('#online_user_list').hide();
+	    $('#chat_input').show();
+	    $('#log_out').hide();
+	    document.getElementById('room_number').innerHTML = d.room_number;
+	}else{
+	    //I am in this chat room
+	    if (d.target_user == myUsername){
+		//I am the target user
+		if ( $('#connection_target').is(':hidden') ){
+		    //I am in a chat already
+		    document.getElementById('status').innerHTML = "Connected to a chat room now";
+		}else{
+		    //I am not in a chat. I have to prepare for the chat
+		    document.getElementById('status').innerHTML = "Connected to a chat room now";
+		    $('#connection_target').hide();
+		    $('#online_user_list').hide();
+		    $('#chat_input').show();
+		    $('#log_out').hide();
+		    document.getElementById('room_number').innerHTML = d.room_number;
+		}
+	    }
+	    else{
+		//I am in this chat room, but I am not the target user
+		document.getElementById('status').innerHTML = "Connected to a chat room now";
+	    }
+	}
+    }else{
+	//connection failure. check whether it is for me
+	var myUsername = $( '#username' ).text();
+	if ( d.new_user == myUsername){
+	    document.getElementById('status').innerHTML = "Connection to user: " + d.target_user + " failed with error info: " + d.error;
+	}
+    }
+})
+
+socket.on( 'chat message ack', function ( d ){
+    console.log(d)
+    $( 'div.message_holder' ).append( '<div><b style="color: #000">'+d.username+'</b> '+d.message+'</div>' )
+})
+
+socket.on( 'quit chat ack', function ( d ){
+    console.log(d)
+    if( d.msg == 'success' ){
+	//we are the one lefting this group chat
+	$('#connection_target').show();
+	$('#online_user_list').show();
+	$('div.message_holder').empty();
+	$('#chat_input').hide();
+	$('#log_out').show();
+	document.getElementById('last_left_user').innerHTML = "No one has left this chat group yet";
+	document.getElementById('status').innerHTML = "You have successfully left the chat room";
+    }else if( d.msg == 'update' ){
+	//someone is still in the chat, we are good
+	document.getElementById('last_left_user').innerHTML = d.left_user + " has last left this chat room.";
+    }else{
+	//we are the only one in this chat room, closing the chat room now
+	$('#connection_target').show();
+	$('#online_user_list').show();
+	$('div.message_holder').empty();
+	$('#chat_input').hide();
+	$('#log_out').show();
+	document.getElementById('last_left_user').innerHTML = "No one has left this chat group yet";
+	document.getElementById('status').innerHTML = "Someone has left this chat room and you are alone. Therefore the previous chat session is closed.";
+    }
+})
+
+
+socket.on( 'disconnection ack', function( d ){
+    console.log(d)
+    if( d.msg== 'success'){
+	document.getElementById('status').innerHTML = "Not connected to the server yet.";
+    }
+})
+</script>
+
+</body>
+</html>
