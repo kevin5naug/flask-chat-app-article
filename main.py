@@ -5,6 +5,7 @@ import functools
 from flask_socketio import *
 #from flask_socketio import SocketIO, disconnect
 from flask_login import LoginManager, current_user, UserMixin, login_required, login_user, logout_user
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'vnkdjnfjknfl1232#'
 socketio = SocketIO(app)
@@ -38,7 +39,7 @@ class User(UserMixin):
     def is_authenticated(self):
         cursor=conn.cursor()
         query='select * from user where username = %s'
-        cursor.execute(query, self.id)
+        cursor.execute(query, (self.id,))
         data=cursor.fetchone()
         cursor.close()
         if(data):
@@ -71,7 +72,7 @@ def index():
 
 @app.route('/login_page')
 def login_page():
-    return render_template('login_page.html')
+    return render_template('login_page.html', error=None)
 
 @app.route('/register_page')
 def register_page():
@@ -80,6 +81,14 @@ def register_page():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     username=request.form['username']
+    #check duplicate login
+    cursor=conn.cursor()
+    query='select * from user where username = %s and online = %s'
+    cursor.execute(query, (username, 1))
+    data=cursor.fetchone()
+    cursor.close()
+    if(data): #we have duplicate login
+        return render_template('login_page.html', error="This user has already been logged in.")
     user=User(username)
     if user.is_authenticated:
         login_user(user)
@@ -91,6 +100,8 @@ def login():
         cursor.close()
         flash('Logged in successfully.')
         return redirect(url_for('home'))
+    else:
+        return render_template('login_page.html', error="Please register your username first.")
 
 @app.route('/logout')
 @login_required
