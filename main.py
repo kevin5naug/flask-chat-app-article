@@ -58,7 +58,7 @@ class User(UserMixin):
 def load_user(user_id):
     cursor=conn.cursor()
     query='select * from user where username = %s'
-    cursor.execute(query, user_id)
+    cursor.execute(query, (user_id,))
     data=cursor.fetchone()
     cursor.close()
     if(data):
